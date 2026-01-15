@@ -1,420 +1,634 @@
-const KEY_FROGS="frogs.pool.v1";
-const KEY_TODAY="frogs.today.v1";
-const KEY_REWARD="frogs.reward.v1";
 
-function uid(){return "f_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,9);}
-function todayISO(){const d=new Date();const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,"0");const dd=String(d.getDate()).padStart(2,"0");return `${y}-${m}-${dd}`;}
-function monthKey(date=new Date()){const y=date.getFullYear();const m=String(date.getMonth()+1).padStart(2,"0");return `${y}-${m}`;}
-function parseISO(iso){const [y,m,d]=iso.split("-").map(Number);return new Date(y,m-1,d,12,0,0,0);}
-function fmtDate(iso){return iso?parseISO(iso).toLocaleDateString("ru-RU",{day:"2-digit",month:"short",year:"numeric"}):"";}
-function fmtShort(iso){return iso?parseISO(iso).toLocaleDateString("ru-RU",{day:"2-digit",month:"short"}):"";}
-function escapeHtml(s){const div=document.createElement("div");div.textContent=String(s??"");return div.innerHTML;}
-function load(k,f){try{const r=localStorage.getItem(k);return r?JSON.parse(r):f;}catch{return f;}}
-function save(k,v){localStorage.setItem(k,JSON.stringify(v));}
+(() => {
+  const NS = 'frogsPWA.';
+  const KEY_POOL = NS + 'pool';
+  const KEY_TODAY = NS + 'today';
+  const KEY_REWARD_PREFIX = NS + 'reward.'; // + YYYY-MM
+  const KEY_EXPORT_HINT = NS + 'exportHint';
 
-let pool=load(KEY_FROGS,null);
-let todayMap=load(KEY_TODAY,{});
-let rewardMap=load(KEY_REWARD,{});
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-if(!Array.isArray(pool)){
-  pool=[
-    {id:uid(),title:"Сделать самое неприятное первым делом",estMin:25,deadline:null,createdAt:todayISO(),doneAt:null},
-    {id:uid(),title:"Разобрать 1 папку/почту 15 минут",estMin:15,deadline:null,createdAt:todayISO(),doneAt:null},
-  ];
-  save(KEY_FROGS,pool);
-}
+  const tabs = $$('.tab');
+  const viewToday = $('#viewToday');
+  const viewList = $('#viewList');
+  const viewReward = $('#viewReward');
+  const statDone = $('#statDone');
+  const statPicked = $('#statPicked');
 
-const subtitleEl=document.getElementById("subtitle");
-const tabs=[...document.querySelectorAll(".tab")];
-const viewToday=document.getElementById("viewToday");
-const viewList=document.getElementById("viewList");
-const viewReward=document.getElementById("viewReward");
-const exportBtn=document.getElementById("exportBtn");
-const importFile=document.getElementById("importFile");
+  const todayCards = $('#todayCards');
+  const listCards = $('#listCards');
 
-function registerSW(){if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});}
+  const backdrop = $('#backdrop');
+  const pickModal = $('#pickModal');
+  const pickList = $('#pickList');
+  const pickBtn = $('#pickBtn');
+  const clearTodayBtn = $('#clearTodayBtn');
+  const closePick = $('#closePick');
+  const cancelPick = $('#cancelPick');
+  const savePick = $('#savePick');
 
-function getTodayIds(){const t=todayISO();if(!Array.isArray(todayMap[t]))todayMap[t]=[];return todayMap[t];}
-function setTodayIds(ids){todayMap[todayISO()]=ids;save(KEY_TODAY,todayMap);}
-function getFrogById(id){return pool.find(f=>f.id===id)||null;}
+  const editModal = $('#editModal');
+  const editTitle = $('#editTitle');
+  const fTitle = $('#fTitle');
+  const fDeadline = $('#fDeadline');
+  const fEst = $('#fEst');
+  const closeEdit = $('#closeEdit');
+  const cancelEdit = $('#cancelEdit');
+  const saveEdit = $('#saveEdit');
+  const deleteBtn = $('#deleteBtn');
+  const addBtn = $('#addBtn');
 
-function deadlinePill(f){
-  if(!f.deadline)return "";
-  const dl=parseISO(f.deadline);
-  const now=new Date();now.setHours(12,0,0,0);
-  const diffDays=Math.round((dl-now)/(1000*60*60*24));
-  if(diffDays<0)return `<span class="pill dead">Дедлайн прошёл</span>`;
-  if(diffDays===0)return `<span class="pill warn">Дедлайн сегодня</span>`;
-  if(diffDays<=3)return `<span class="pill warn">Дедлайн скоро</span>`;
-  return `<span class="pill">Дедлайн: ${escapeHtml(fmtShort(f.deadline))}</span>`;
-}
-function doneThisMonthCount(mKey){return pool.filter(f=>f.doneAt&&f.doneAt.startsWith(mKey)).length;}
+  const rewardInput = $('#rewardInput');
+  const rewardBanner = $('#rewardBanner');
+  const monthKeyEl = $('#monthKey');
+  const monthProgress = $('#monthProgress');
 
-function render(tab){
-  tabs.forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
-  viewToday.classList.toggle("hidden",tab!=="today");
-  viewList.classList.toggle("hidden",tab!=="list");
-  viewReward.classList.toggle("hidden",tab!=="reward");
-  if(tab==="today")renderToday();
-  if(tab==="list")renderList();
-  if(tab==="reward")renderReward();
-}
-tabs.forEach(b=>b.addEventListener("click",()=>render(b.dataset.tab)));
+  const exportBtn = $('#exportBtn');
+  const importBtn = $('#importBtn');
+  const importFile = $('#importFile');
 
-// TODAY
-function renderToday(){
-  subtitleEl.textContent=`Сегодня • ${new Date().toLocaleDateString("ru-RU",{day:"2-digit",month:"long"})}`;
-  const ids=getTodayIds();
-  const frogsToday=ids.map(getFrogById).filter(Boolean);
-  const doneToday=frogsToday.filter(f=>f.doneAt===todayISO()).length;
-  const candidates=pool.filter(f=>!f.doneAt).sort((a,b)=>{
-    const da=a.deadline?a.deadline:"9999-12-31";
-    const db=b.deadline?b.deadline:"9999-12-31";
-    if(da!==db)return da.localeCompare(db);
-    return (a.createdAt||"").localeCompare(b.createdAt||"");
+  const frogOverlay = $('#frogOverlay');
+  const frogSprite = $('#frogSprite');
+
+  // ===== storage helpers =====
+  const load = (k, defVal) => {
+    try {
+      const v = localStorage.getItem(k);
+      if (v === null) return defVal;
+      return JSON.parse(v);
+    } catch {
+      return defVal;
+    }
+  };
+  const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+  const todayISO = () => new Date().toISOString().slice(0,10); // YYYY-MM-DD
+  const monthKey = () => new Date().toISOString().slice(0,7); // YYYY-MM
+
+  const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+
+  // Frog item: {id, title, deadline?, estMin?, createdAt, doneAt? (YYYY-MM-DD), doneMonth? (YYYY-MM)}
+  let pool = load(KEY_POOL, []);
+  let todayIds = load(KEY_TODAY, []);
+  if (!Array.isArray(todayIds)) todayIds = [];
+
+  // Seed if empty
+  if (!pool.length) {
+    pool = [
+      { id: uid(), title: 'Вода', deadline: null, estMin: 25, createdAt: Date.now(), doneAt: null, doneMonth: null },
+      { id: uid(), title: 'Прогулка', deadline: null, estMin: 15, createdAt: Date.now(), doneAt: null, doneMonth: null },
+    ];
+    save(KEY_POOL, pool);
+  }
+
+  // ===== tabs =====
+  const renderTabs = (tab) => {
+    tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    viewToday.classList.toggle('hidden', tab !== 'today');
+    viewList.classList.toggle('hidden', tab !== 'list');
+    viewReward.classList.toggle('hidden', tab !== 'reward');
+  };
+  tabs.forEach(b => b.addEventListener('click', () => {
+    renderTabs(b.dataset.tab);
+    if (b.dataset.tab === 'today') renderToday();
+    if (b.dataset.tab === 'list') renderList();
+    if (b.dataset.tab === 'reward') renderReward();
+  }));
+
+  // ===== modal helpers =====
+  const openModal = (modal) => {
+    backdrop.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  };
+  const closeModal = (modal) => {
+    modal.classList.add('hidden');
+    if (pickModal.classList.contains('hidden') && editModal.classList.contains('hidden')) {
+      backdrop.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+  };
+  backdrop.addEventListener('click', () => {
+    closeModal(pickModal);
+    closeModal(editModal);
   });
 
-  viewToday.innerHTML=`
-    <div class="card">
-      <div class="row">
-        <div class="stack">
-          <div class="cardTitle">Мои лягушки сегодня</div>
-          <div class="cardMeta">Выбери 1–3 задачи из общего списка и закрой их. <b>Лимит: 3</b>.</div>
+  // ===== pick today =====
+  const openPick = () => {
+    // Build list of non-done frogs (still can pick done? let's hide done)
+    const active = pool.filter(f => !f.doneAt);
+    const picked = new Set(todayIds);
+    pickList.innerHTML = active.length ? '' : `<div class="help" style="padding:14px 0">Пока нет лягушек. Добавь их во вкладке «Список».</div>`;
+    active.forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'pickItem';
+      const checked = picked.has(f.id);
+      item.innerHTML = `
+        <input type="checkbox" data-id="${f.id}" ${checked ? 'checked' : ''}/>
+        <div>
+          <div class="pickTitle">${escapeHtml(f.title)}</div>
+          <div class="pickMeta">
+            ${f.estMin ? `⏱ Примерно: <b>${escapeHtml(String(f.estMin))} мин</b>` : ''}
+            ${f.deadline ? ` &nbsp; 📅 Дедлайн: <b>${fmtDate(f.deadline)}</b>` : ''}
+          </div>
         </div>
-        <div class="stack" style="align-items:flex-end">
-          <span class="pill ok">Сделано: ${doneToday}/${frogsToday.length}</span>
-          <span class="pill">Выбрано: ${ids.length}/3</span>
-        </div>
-      </div>
-      <div class="btnRow">
-        <button class="btn primary" id="openPickerBtn">${ids.length?"Изменить выбор":"Выбрать из списка"}</button>
-        <button class="btn" id="clearTodayBtn" ${ids.length?"":"disabled"}>Очистить сегодня</button>
-      </div>
-    </div>
-    <div id="todayCards"></div>
-    <div id="picker" class="card hidden">
-      <div class="cardTitle">Выбор на сегодня</div>
-      <div class="cardMeta">Отметь до 3 лягушек из пула (только незакрытые).</div>
-      <div class="sep"></div>
-      <div id="pickerList"></div>
-      <div class="btnRow">
-        <button class="btn" id="pickerCancelBtn">Отмена</button>
-        <button class="btn primary" id="pickerSaveBtn">Сохранить выбор</button>
-      </div>
-    </div>
-  `;
+      `;
+      pickList.appendChild(item);
+    });
 
-  const todayCards=viewToday.querySelector("#todayCards");
-  if(!frogsToday.length){
-    todayCards.innerHTML=`<div class="card"><div class="cardTitle">Пока ничего не выбрано</div><div class="cardMeta">Нажми «Выбрать из списка» и отметь 1–3 лягушки на сегодня.</div></div>`;
-  }else{
-    todayCards.innerHTML=frogsToday.map(f=>`
-      <div class="card">
-        <div class="row">
-          <div class="stack">
+    // enforce max 3
+    pickList.onchange = () => {
+      const checks = $$(`#pickList input[type="checkbox"]`);
+      const chosen = checks.filter(c => c.checked);
+      if (chosen.length > 3) {
+        // revert last toggle
+        const last = chosen[chosen.length-1];
+        last.checked = false;
+      }
+    };
+
+    openModal(pickModal);
+  };
+
+  pickBtn.addEventListener('click', openPick);
+  closePick.addEventListener('click', () => closeModal(pickModal));
+  cancelPick.addEventListener('click', () => closeModal(pickModal));
+  savePick.addEventListener('click', () => {
+    const chosen = $$(`#pickList input[type="checkbox"]`).filter(c => c.checked).map(c => c.dataset.id);
+    todayIds = chosen.slice(0,3);
+    save(KEY_TODAY, todayIds);
+    closeModal(pickModal);
+    renderToday();
+  });
+
+  clearTodayBtn.addEventListener('click', () => {
+    todayIds = [];
+    save(KEY_TODAY, todayIds);
+    renderToday();
+  });
+
+  // ===== add/edit =====
+  let editingId = null;
+
+  addBtn.addEventListener('click', () => openEdit(null));
+
+  const openEdit = (id) => {
+    editingId = id;
+    const f = id ? pool.find(x => x.id === id) : null;
+    editTitle.textContent = id ? 'Редактировать лягушку' : 'Добавить лягушку';
+    fTitle.value = f?.title || '';
+    fDeadline.value = f?.deadline || '';
+    fEst.value = (f?.estMin ?? '') === 0 ? 0 : (f?.estMin ?? '');
+    deleteBtn.classList.toggle('hidden', !id);
+    openModal(editModal);
+    setTimeout(()=>fTitle.focus(), 50);
+  };
+
+  closeEdit.addEventListener('click', () => closeModal(editModal));
+  cancelEdit.addEventListener('click', () => closeModal(editModal));
+
+  saveEdit.addEventListener('click', () => {
+    const title = fTitle.value.trim();
+    if (!title) {
+      fTitle.focus();
+      fTitle.style.borderColor = 'rgba(226,109,109,.8)';
+      setTimeout(()=> fTitle.style.borderColor = '', 900);
+      return;
+    }
+    const deadline = fDeadline.value ? fDeadline.value : null;
+    const estMin = fEst.value ? Number(fEst.value) : null;
+
+    if (editingId) {
+      const idx = pool.findIndex(x => x.id === editingId);
+      if (idx >= 0) {
+        pool[idx] = { ...pool[idx], title, deadline, estMin };
+      }
+    } else {
+      pool.unshift({ id: uid(), title, deadline, estMin, createdAt: Date.now(), doneAt: null, doneMonth: null });
+    }
+    save(KEY_POOL, pool);
+    closeModal(editModal);
+    renderList();
+    renderToday();
+  });
+
+  deleteBtn.addEventListener('click', () => {
+    if (!editingId) return;
+    pool = pool.filter(x => x.id !== editingId);
+    todayIds = todayIds.filter(id => id !== editingId);
+    save(KEY_POOL, pool);
+    save(KEY_TODAY, todayIds);
+    closeModal(editModal);
+    renderList();
+    renderToday();
+  });
+
+  // ===== render list =====
+  function renderList() {
+    const active = pool.filter(f => !f.doneAt);
+    const done = pool.filter(f => f.doneAt);
+    listCards.innerHTML = '';
+
+    const renderSection = (title, arr, doneSection=false) => {
+      if (!arr.length) return;
+      const sec = document.createElement('div');
+      sec.className = 'card';
+      sec.innerHTML = `<div class="cardTitle">${title}</div><div class="cardMeta">${doneSection ? 'Закрытые задачи (для истории).' : 'Задачи в общем списке.'}</div>`;
+      listCards.appendChild(sec);
+
+      arr.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="badgeRow">
+            <div>
+              <div class="cardTitle">${escapeHtml(f.title)}</div>
+              <div class="cardMeta">
+                ${f.estMin ? `⏱ Примерно: <b>${escapeHtml(String(f.estMin))} мин</b>` : '⏱ Примерно: —'}
+                ${f.deadline ? ` &nbsp; 📅 Дедлайн: <b>${fmtDate(f.deadline)}</b>` : ' &nbsp; 📅 Дедлайн: —'}
+              </div>
+            </div>
+            <div class="badge ${doneSection ? 'done':'work'}">${doneSection ? `Сделано ${fmtDate(f.doneAt)}` : 'В списке'}</div>
+          </div>
+          <div class="cardActions">
+            ${doneSection ? '' : `<button class="btn primary" data-action="edit" data-id="${f.id}">Редактировать</button>`}
+            ${doneSection ? '' : `<button class="btn" data-action="addToToday" data-id="${f.id}">В «Сегодня»</button>`}
+            ${doneSection ? `<button class="btn" data-action="restore" data-id="${f.id}">Вернуть в список</button>` : ''}
+          </div>
+        `;
+        listCards.appendChild(card);
+      });
+    };
+
+    renderSection('Активные лягушки', active, false);
+    renderSection('История', done, true);
+
+    listCards.onclick = (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      const action = btn.dataset.action;
+      const f = pool.find(x => x.id === id);
+      if (!f) return;
+
+      if (action === 'edit') openEdit(id);
+      if (action === 'addToToday') {
+        if (todayIds.includes(id)) return;
+        if (todayIds.length >= 3) {
+          toast('Лимит: 3 лягушки на сегодня');
+          return;
+        }
+        todayIds.push(id);
+        save(KEY_TODAY, todayIds);
+        toast('Добавлено в «Сегодня»');
+        renderToday();
+      }
+      if (action === 'restore') {
+        f.doneAt = null;
+        f.doneMonth = null;
+        save(KEY_POOL, pool);
+        renderList();
+        renderReward();
+      }
+    };
+  }
+
+  // ===== render today =====
+  function renderToday() {
+    // remove ids that point to deleted or done frogs
+    const map = new Map(pool.map(f => [f.id, f]));
+    todayIds = todayIds.filter(id => map.has(id) && !map.get(id).doneAt);
+    save(KEY_TODAY, todayIds);
+
+    const frogsToday = todayIds.map(id => map.get(id)).filter(Boolean);
+
+    const doneCount = 0; // done today view is only chosen; done ones removed
+    statPicked.textContent = `Выбрано: ${frogsToday.length}/3`;
+
+    todayCards.innerHTML = '';
+    if (!frogsToday.length) {
+      todayCards.innerHTML = `
+        <div class="card">
+          <div class="cardTitle">Пока ничего не выбрано</div>
+          <div class="cardMeta">Нажми «Изменить выбор» и отметь 1–3 лягушки на сегодня.</div>
+        </div>
+      `;
+      statDone.textContent = `Сделано: 0/0`;
+      return;
+    }
+
+    statDone.textContent = `Сделано: 0/${frogsToday.length}`;
+
+    frogsToday.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="badgeRow">
+          <div>
             <div class="cardTitle">${escapeHtml(f.title)}</div>
             <div class="cardMeta">
-              <div>⏱ Примерно: <b>${escapeHtml(String(f.estMin||0))} мин</b></div>
-              ${f.deadline?`<div>📅 Дедлайн: <b>${escapeHtml(fmtDate(f.deadline))}</b></div>`:`<div>📅 Дедлайн: —</div>`}
+              ⏱ Примерно: <b>${escapeHtml(String(f.estMin || 0))} мин</b>
+              &nbsp; 📅 Дедлайн: <b>${f.deadline ? fmtDate(f.deadline) : '—'}</b>
             </div>
           </div>
-          <div class="stack" style="align-items:flex-end">
-            <span class="pill warn">В работе</span>
-            ${deadlinePill(f)}
-          </div>
+          <div class="badge work">В работе</div>
         </div>
-        <div class="btnRow">
+        <div class="cardActions">
           <button class="btn primary" data-action="done" data-id="${f.id}">Сделано ✅</button>
           <button class="btn danger" data-action="removeFromToday" data-id="${f.id}">Убрать из «Сегодня»</button>
         </div>
-      </div>
-    `).join("");
-  }
+      `;
+      todayCards.appendChild(card);
+    });
 
-  todayCards.onclick=(e)=>{
-    const btn=e.target.closest("button[data-action]");
-    if(!btn)return;
-    const id=btn.dataset.id;
-    const action=btn.dataset.action;
-    const f=getFrogById(id);
-    if(!f)return;
-    if(action==="done"){
-      f.doneAt=todayISO();
-      save(KEY_FROGS,pool);
-      // remove from today's selection so it disappears immediately
-      const idsNow=getTodayIds().filter(x=>x!==id);
-      setTodayIds(idsNow);
-      renderToday();
-      return;
-    }
-    if(action==="removeFromToday"){
-      const idsNow=getTodayIds().filter(x=>x!==id);
-      setTodayIds(idsNow);
-      renderToday();
-      return;
-    }
-  };
+    todayCards.onclick = (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      const f = pool.find(x => x.id === id);
+      if (!f) return;
 
-  const picker=viewToday.querySelector("#picker");
-  const openPickerBtn=viewToday.querySelector("#openPickerBtn");
-  const clearTodayBtn=viewToday.querySelector("#clearTodayBtn");
+      const card = btn.closest('.card');
 
-  function openPicker(){
-    picker.classList.remove("hidden");
-    const pickerList=viewToday.querySelector("#pickerList");
-    const current=new Set(getTodayIds());
-    pickerList.innerHTML=candidates.length?candidates.map(f=>{
-      const checked=current.has(f.id);
-      const disabled=(!checked && current.size>=3);
-      return `
-        <div class="card" style="background: rgba(255,255,255,0.04); box-shadow:none;">
-          <div class="checkboxRow">
-            <input type="checkbox" class="pickChk" data-id="${f.id}" ${checked?"checked":""} ${disabled?"disabled":""} />
-            <div class="stack" style="gap:4px">
-              <div style="font-weight:900">${escapeHtml(f.title)}</div>
-              <div class="small">⏱ ${escapeHtml(String(f.estMin||0))} мин • ${f.deadline?("📅 "+escapeHtml(fmtShort(f.deadline))):"без дедлайна"}</div>
-            </div>
-          </div>
-        </div>`;
-    }).join(""):`<div class="note">Нет незакрытых лягушек. Добавь новые во вкладке «Список».</div>`;
+      if (action === 'removeFromToday') {
+        todayIds = todayIds.filter(x => x !== id);
+        save(KEY_TODAY, todayIds);
+        if (card) {
+          card.classList.add('frog-hop');
+          const spark = document.createElement('div');
+          spark.className = 'frog-spark';
+          card.appendChild(spark);
+        }
+        setTimeout(renderToday, 180);
+        return;
+      }
 
-    pickerList.onchange=(ev)=>{
-      const chk=ev.target.closest(".pickChk"); if(!chk)return;
-      const checked=[...pickerList.querySelectorAll(".pickChk:checked")].map(x=>x.dataset.id);
-      if(checked.length>3) chk.checked=false;
-      const final=[...pickerList.querySelectorAll(".pickChk:checked")];
-      pickerList.querySelectorAll(".pickChk").forEach(x=>{ if(!x.checked) x.disabled = final.length>=3; });
+      if (action === 'done') {
+        // local card hop + spark
+        if (card) {
+          card.classList.remove('frog-hop');
+          void card.offsetWidth;
+          card.classList.add('frog-hop');
+          const spark = document.createElement('div');
+          spark.className = 'frog-spark';
+          card.style.position = 'relative';
+          card.appendChild(spark);
+          setTimeout(() => spark.remove(), 520);
+        }
+
+        // mark done
+        f.doneAt = todayISO();
+        f.doneMonth = monthKey();
+        save(KEY_POOL, pool);
+
+        // remove from today after tiny delay, so animation can be seen
+        setTimeout(() => {
+          todayIds = todayIds.filter(x => x !== id);
+          save(KEY_TODAY, todayIds);
+          renderToday();
+          renderList();  // reflect status
+          renderReward(); // progress
+        }, 240);
+
+        // fullscreen frog + sound
+        playDoneFX();
+      }
     };
   }
-  function closePicker(){picker.classList.add("hidden");}
 
-  openPickerBtn.onclick=openPicker;
-  clearTodayBtn.onclick=()=>{
-    if(!getTodayIds().length)return;
-    if(!confirm("Очистить выбор на сегодня?"))return;
-    setTodayIds([]); renderToday();
-  };
-  viewToday.querySelector("#pickerCancelBtn")?.addEventListener("click", closePicker);
-  viewToday.querySelector("#pickerSaveBtn")?.addEventListener("click", ()=>{
-    const pickerList=viewToday.querySelector("#pickerList");
-    const idsSelected=[...pickerList.querySelectorAll(".pickChk:checked")].map(x=>x.dataset.id).slice(0,3);
-    setTodayIds(idsSelected);
-    closePicker(); renderToday();
+  // ===== reward =====
+  function renderReward() {
+    const mk = monthKey();
+    monthKeyEl.textContent = mk;
+    const doneThisMonth = pool.filter(f => f.doneMonth === mk).length;
+    monthProgress.textContent = `Прогресс: ${doneThisMonth}/20`;
+
+    const rKey = KEY_REWARD_PREFIX + mk;
+    const reward = load(rKey, '');
+    rewardInput.value = reward;
+
+    if (doneThisMonth >= 20 && reward.trim()) {
+      rewardBanner.classList.remove('hidden');
+      rewardBanner.textContent = `🎉 Ты закрыла минимум 20 лягушек! Награда: ${reward}`;
+    } else {
+      rewardBanner.classList.add('hidden');
+      rewardBanner.textContent = '';
+    }
+  }
+  rewardInput.addEventListener('input', () => {
+    save(KEY_REWARD_PREFIX + monthKey(), rewardInput.value);
+    renderReward();
   });
-}
 
-// LIST
-function renderList(){
-  subtitleEl.textContent="Список • общий пул";
-  const openFrogs=pool.filter(f=>!f.doneAt);
-  const doneFrogs=pool.filter(f=>!!f.doneAt);
-
-  viewList.innerHTML=`
-    <div class="card">
-      <div class="row">
-        <div class="stack">
-          <div class="cardTitle">Общий список лягушек</div>
-          <div class="cardMeta">Добавляй задачи в пул. Утром выбирай 1–3 во вкладке «Сегодня».</div>
-        </div>
-        <div class="stack" style="align-items:flex-end">
-          <span class="pill">Открытые: ${openFrogs.length}</span>
-          <span class="pill ok">Закрытые: ${doneFrogs.length}</span>
-        </div>
-      </div>
-      <div class="sep"></div>
-      <div class="grid2">
-        <div class="field"><span>Название лягушки</span><input id="newTitle" class="input" placeholder="например: Позвонить в банк" /></div>
-        <div class="field"><span>Примерное время (мин)</span><input id="newEst" class="input" type="number" min="5" step="5" value="25" /></div>
-        <div class="field"><span>Дедлайн (если есть)</span><input id="newDeadline" class="input" type="date" /></div>
-        <div class="field"><span>&nbsp;</span><button id="addFrogBtn" class="btn primary">+ Добавить в пул</button></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="cardTitle">Открытые лягушки</div>
-      <div class="cardMeta">${openFrogs.length?"Нажми «В работу сегодня», чтобы быстро добавить в выбор.":"Открытых лягушек нет."}</div>
-      <div class="sep"></div>
-      <div id="openList"></div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <div class="stack">
-          <div class="cardTitle">Закрытые</div>
-          <div class="cardMeta">История закрытых лягушек (по датам закрытия).</div>
-        </div>
-        <button class="btn danger" id="clearDoneBtn" ${doneFrogs.length?"":"disabled"}>Очистить историю</button>
-      </div>
-      <div class="sep"></div>
-      <div id="doneList"></div>
-    </div>
-  `;
-
-  const openList=viewList.querySelector("#openList");
-  const sortedOpen=openFrogs.slice().sort((a,b)=>{
-    const da=a.deadline?a.deadline:"9999-12-31";
-    const db=b.deadline?b.deadline:"9999-12-31";
-    if(da!==db)return da.localeCompare(db);
-    return (a.createdAt||"").localeCompare(b.createdAt||"");
+  // ===== export/import =====
+  exportBtn.addEventListener('click', () => {
+    const data = {
+      v: 1,
+      exportedAt: new Date().toISOString(),
+      pool,
+      todayIds,
+      rewards: exportRewards()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `frogs-backup-${monthKey()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    save(KEY_EXPORT_HINT, true);
   });
-  openList.innerHTML=sortedOpen.length?sortedOpen.map(f=>`
-    <div class="card" style="background: rgba(255,255,255,0.04); box-shadow:none;">
-      <div class="listRow">
-        <div class="stack" style="gap:4px">
-          <div style="font-weight:900">${escapeHtml(f.title)}</div>
-          <div class="small">⏱ ${escapeHtml(String(f.estMin||0))} мин • ${f.deadline?("📅 "+escapeHtml(fmtShort(f.deadline))):"без дедлайна"}</div>
-        </div>
-        <div class="btnRow" style="margin-top:0">
-          <button class="btn primary" data-action="toToday" data-id="${f.id}">В работу сегодня</button>
-          <button class="btn danger" data-action="del" data-id="${f.id}">Удалить</button>
-        </div>
-      </div>
-    </div>
-  `).join(""):`<div class="note">Добавь лягушку выше — и она появится тут.</div>`;
 
-  const doneList=viewList.querySelector("#doneList");
-  const sortedDone=doneFrogs.slice().sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
-  doneList.innerHTML=sortedDone.length?sortedDone.map(f=>`
-    <div class="card" style="background: rgba(255,255,255,0.04); box-shadow:none;">
-      <div class="listRow">
-        <div class="stack" style="gap:4px">
-          <div style="font-weight:900">${escapeHtml(f.title)}</div>
-          <div class="small">✅ ${escapeHtml(fmtDate(f.doneAt))} • ⏱ ${escapeHtml(String(f.estMin||0))} мин</div>
-        </div>
-        <div class="btnRow" style="margin-top:0">
-          <button class="btn" data-action="reopen" data-id="${f.id}">Вернуть</button>
-          <button class="btn danger" data-action="del" data-id="${f.id}">Удалить</button>
-        </div>
-      </div>
-    </div>
-  `).join(""):`<div class="note">Пока нет закрытых лягушек.</div>`;
-
-  viewList.querySelector("#addFrogBtn").onclick=()=>{
-    const title=viewList.querySelector("#newTitle").value.trim();
-    const est=Number(viewList.querySelector("#newEst").value||0);
-    const deadline=viewList.querySelector("#newDeadline").value||null;
-    if(!title){alert("Напиши название лягушки.");return;}
-    const estMin=Math.max(5,Math.min(600,Math.round(est||25)));
-    pool.push({id:uid(),title,estMin,deadline:deadline||null,createdAt:todayISO(),doneAt:null});
-    save(KEY_FROGS,pool);
-    viewList.querySelector("#newTitle").value="";
-    viewList.querySelector("#newEst").value="25";
-    viewList.querySelector("#newDeadline").value="";
-    renderList();
-  };
-
-  viewList.onclick=(e)=>{
-    const btn=e.target.closest("button[data-action]");
-    if(!btn)return;
-    const id=btn.dataset.id;
-    const action=btn.dataset.action;
-    const f=getFrogById(id);
-    if(!f)return;
-
-    if(action==="toToday"){
-      const ids=getTodayIds().slice();
-      if(ids.includes(id)) return alert("Эта лягушка уже выбрана на сегодня.");
-      if(ids.length>=3) return alert("Лимит 3 лягушки на день.");
-      ids.push(id); setTodayIds(ids); alert("Добавлено в «Сегодня».");
-      return;
+  importBtn.addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || !Array.isArray(data.pool)) throw new Error('bad');
+      pool = data.pool;
+      todayIds = Array.isArray(data.todayIds) ? data.todayIds : [];
+      save(KEY_POOL, pool);
+      save(KEY_TODAY, todayIds);
+      if (data.rewards && typeof data.rewards === 'object') {
+        Object.entries(data.rewards).forEach(([k,v]) => {
+          localStorage.setItem(KEY_REWARD_PREFIX + k, JSON.stringify(v));
+        });
+      }
+      toast('Импортировано ✅');
+      renderToday(); renderList(); renderReward();
+    } catch {
+      toast('Не удалось импортировать файл');
+    } finally {
+      importFile.value = '';
     }
-    if(action==="reopen"){
-      f.doneAt=null; save(KEY_FROGS,pool); renderList(); return;
+  });
+
+  function exportRewards() {
+    const out = {};
+    for (let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k.startsWith(KEY_REWARD_PREFIX)) {
+        const mk = k.slice(KEY_REWARD_PREFIX.length);
+        out[mk] = load(k,'');
+      }
     }
-    if(action==="del"){
-      if(!confirm("Удалить лягушку?"))return;
-      pool=pool.filter(x=>x.id!==id);
-      const ids=getTodayIds().filter(x=>x!==id);
-      setTodayIds(ids);
-      save(KEY_FROGS,pool);
-      renderList();
-      return;
+    return out;
+  }
+
+  // ===== FX (frog jump + sound) =====
+  let audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioCtx = new Ctx();
     }
-  };
+  }
 
-  viewList.querySelector("#clearDoneBtn").onclick=()=>{
-    if(!confirm("Очистить всю историю закрытых лягушек?"))return;
-    pool.forEach(f=>{if(f.doneAt)f.doneAt=null;});
-    save(KEY_FROGS,pool);
-    renderList();
-  };
-}
+  function playSplat(ctx, t0) {
+    // noise burst
+    const dur = 0.10;
+    const bufferSize = Math.floor(ctx.sampleRate * dur);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i=0;i<bufferSize;i++){
+      data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
 
-// REWARD
-function renderReward(){
-  const mk=monthKey(new Date());
-  subtitleEl.textContent=`Награда • ${mk}`;
-  const current=rewardMap[mk]||{text:""};
-  const done=doneThisMonthCount(mk);
-  const target=20;
-  const pct=Math.min(100,Math.round(done*100/target));
-  const unlocked=done>=target;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, t0);
+    filter.frequency.exponentialRampToValueAtTime(180, t0 + dur);
 
-  viewReward.innerHTML=`
-    <div class="card">
-      <div class="row">
-        <div class="stack">
-          <div class="cardTitle">Награда месяца</div>
-          <div class="cardMeta">Если закрыто <b>${target}</b> лягушек за месяц — награда разблокируется 🎉</div>
-        </div>
-        <div class="stack" style="align-items:flex-end">
-          <span class="pill ${unlocked?"ok":"warn"}">${done}/${target}</span>
-          <span class="pill">${pct}%</span>
-        </div>
-      </div>
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.35, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-      <div class="field">
-        <span>Твоя награда на ${mk}</span>
-        <textarea id="rewardText" class="textarea" placeholder="Например: Термалка + массаж / подарок себе / выходной без задач"></textarea>
-      </div>
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(t0);
+    src.stop(t0 + dur);
+  }
 
-      <div class="btnRow">
-        <button class="btn primary" id="saveRewardBtn">Сохранить награду</button>
-        <button class="btn" id="fillExampleBtn">Пример</button>
-      </div>
+  function playRibbit(ctx, t0) {
+    // playful "kvaaa": two tones with slight vibrato
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.28, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.42);
+    gain.connect(ctx.destination);
 
-      <div class="sep"></div>
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(310, t0);
+    osc1.frequency.exponentialRampToValueAtTime(220, t0 + 0.20);
+    osc1.frequency.exponentialRampToValueAtTime(250, t0 + 0.42);
 
-      <div class="card" style="background: rgba(255,255,255,0.04); box-shadow:none;">
-        <div class="cardTitle">${unlocked?"Награда разблокирована! 🥳":"Почти там… 🐸"}</div>
-        <div class="cardMeta" style="font-size:14px; margin-top:10px;">
-          ${unlocked?`<div><b>Ты закрыла минимум ${target} лягушек.</b> Забирай награду 😄</div>`:`<div>Закрой ещё <b>${Math.max(0,target-done)}</b> лягушек в этом месяце — и награда откроется.</div>`}
-        </div>
-      </div>
-    </div>
-  `;
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(620, t0);
+    osc2.frequency.exponentialRampToValueAtTime(440, t0 + 0.22);
+    osc2.frequency.exponentialRampToValueAtTime(500, t0 + 0.42);
 
-  const txt=viewReward.querySelector("#rewardText");
-  txt.value=current.text||"";
-  viewReward.querySelector("#saveRewardBtn").onclick=()=>{
-    rewardMap[mk]={text:txt.value.trim()};
-    save(KEY_REWARD,rewardMap);
-    alert("Сохранено ✅");
-  };
-  viewReward.querySelector("#fillExampleBtn").onclick=()=>{txt.value="Награда: 1 день в термах + вкусный ужин без чувства вины 🙂";};
-}
+    // vibrato
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(8, t0);
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.setValueAtTime(18, t0);
 
-// EXPORT/IMPORT
-exportBtn.addEventListener("click",()=>{
-  const data={pool,todayMap,rewardMap,meta:{app:"Frogs",version:"1.0"}};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url; a.download=`frogs-backup-${todayISO()}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-});
-importFile.addEventListener("change",async()=>{
-  const file=importFile.files?.[0]; if(!file)return;
-  try{
-    const text=await file.text(); const data=JSON.parse(text);
-    if(!data||!Array.isArray(data.pool)) throw 0;
-    pool=data.pool; todayMap=data.todayMap||{}; rewardMap=data.rewardMap||{};
-    save(KEY_FROGS,pool); save(KEY_TODAY,todayMap); save(KEY_REWARD,rewardMap);
-    alert("Импорт выполнен ✅"); render("today");
-  }catch{ alert("Не удалось импортировать файл."); }
-  finally{ importFile.value=""; }
-});
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc1.frequency);
+    lfoGain.connect(osc2.frequency);
 
-function init(){registerSW(); render("today");}
-init();
+    osc1.connect(gain);
+    osc2.connect(gain);
+
+    lfo.start(t0);
+    osc1.start(t0);
+    osc2.start(t0);
+    lfo.stop(t0 + 0.45);
+    osc1.stop(t0 + 0.45);
+    osc2.stop(t0 + 0.45);
+  }
+
+  function playDoneFX() {
+    // Visual
+    frogOverlay.classList.remove('hidden');
+    frogSprite.classList.remove('frogRun');
+    void frogSprite.offsetWidth; // restart
+    frogSprite.classList.add('frogRun');
+
+    setTimeout(() => {
+      frogOverlay.classList.add('hidden');
+      frogSprite.classList.remove('frogRun');
+    }, 750);
+
+    // Sound
+    try {
+      ensureAudio();
+      if (!audioCtx) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const t0 = audioCtx.currentTime + 0.01;
+      playSplat(audioCtx, t0);
+      playSplat(audioCtx, t0 + 0.07);
+      playRibbit(audioCtx, t0 + 0.12);
+    } catch {}
+  }
+
+  // ===== utils =====
+  function fmtDate(iso) {
+    try {
+      const [y,m,d] = iso.split('-').map(Number);
+      const dt = new Date(y, m-1, d);
+      return dt.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
+    } catch {
+      return iso;
+    }
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  function toast(text) {
+    const t = document.createElement('div');
+    t.textContent = text;
+    t.style.position = 'fixed';
+    t.style.left = '50%';
+    t.style.bottom = '22px';
+    t.style.transform = 'translateX(-50%)';
+    t.style.padding = '10px 14px';
+    t.style.borderRadius = '14px';
+    t.style.background = 'rgba(0,0,0,.5)';
+    t.style.border = '1px solid rgba(255,255,255,.18)';
+    t.style.backdropFilter = 'blur(10px)';
+    t.style.fontWeight = '800';
+    t.style.zIndex = '2000';
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .25s ease'; }, 1300);
+    setTimeout(()=>t.remove(), 1650);
+  }
+
+  // ===== register SW =====
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+
+  // init
+  renderTabs('today');
+  renderToday();
+  renderList();
+  renderReward();
+})();

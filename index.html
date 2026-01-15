@@ -2,47 +2,161 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#155b3f" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f4d32" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <title>Frogs 🐸</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brandIcon">🐸</div>
+      <img class="appIcon" src="icon-192.png" alt="Frogs" />
       <div>
-        <div class="brandTitle">Frogs</div>
-        <div class="brandSub" id="subtitle">Сегодня</div>
+        <div class="appTitle">Frogs</div>
+        <div class="appSub">Сегодня</div>
       </div>
     </div>
-
     <div class="topActions">
-      <button class="btn" id="exportBtn" title="Экспорт">⤓</button>
-      <label class="btn fileBtn" title="Импорт">
-        ⤒
-        <input id="importFile" type="file" accept="application/json" />
-      </label>
+      <button id="exportBtn" class="iconBtn" title="Экспорт">⭳</button>
+      <button id="importBtn" class="iconBtn" title="Импорт">⭱</button>
     </div>
   </header>
 
   <main class="container">
-    <nav class="tabs">
+    <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="today">Сегодня</button>
       <button class="tab" data-tab="list">Список</button>
       <button class="tab" data-tab="reward">Награда</button>
     </nav>
 
-    <section id="viewToday" class="view"></section>
-    <section id="viewList" class="view hidden"></section>
-    <section id="viewReward" class="view hidden"></section>
+    <section id="viewToday" class="view">
+      <div class="panel">
+        <div class="panelHeader">
+          <div>
+            <div class="panelTitle">Мои лягушки сегодня</div>
+            <div class="panelMeta">Выбери 1–3 задачи из общего списка и закрой их. Лимит: 3.</div>
+          </div>
+          <div class="stats">
+            <div class="pill ok" id="statDone">Сделано: 0/0</div>
+            <div class="pill" id="statPicked">Выбрано: 0/3</div>
+          </div>
+        </div>
+        <div class="btnRow">
+          <button class="btn primary" id="pickBtn">Изменить выбор</button>
+          <button class="btn" id="clearTodayBtn">Очистить сегодня</button>
+        </div>
+      </div>
 
-    <footer class="footerNote">
-      <div class="note">Данные хранятся только на этом устройстве (без синхронизации).</div>
-    </footer>
+      <div id="todayCards" class="cards"></div>
+      <div class="hint">Данные хранятся только на этом устройстве (без синхронизации).</div>
+    </section>
+
+    <section id="viewList" class="view hidden">
+      <div class="panel">
+        <div class="panelHeader">
+          <div>
+            <div class="panelTitle">Общий список лягушек</div>
+            <div class="panelMeta">Сюда добавляй задачи. Утром выбирай 1–3 в работу.</div>
+          </div>
+          <button class="btn primary" id="addBtn">+ Лягушка</button>
+        </div>
+      </div>
+      <div id="listCards" class="cards"></div>
+    </section>
+
+    <section id="viewReward" class="view hidden">
+      <div class="panel">
+        <div class="panelHeader">
+          <div>
+            <div class="panelTitle">Награда месяца</div>
+            <div class="panelMeta">Минимум 20 закрытых лягушек за месяц — и ты получаешь награду 🎉</div>
+          </div>
+          <div class="stats">
+            <div class="pill" id="monthKey"></div>
+            <div class="pill ok" id="monthProgress"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Моя награда за этот месяц</label>
+          <input id="rewardInput" type="text" placeholder="Например: SPA-выходные / новая книга / день без дел" />
+          <div class="help">Сохраняется локально на устройстве.</div>
+        </div>
+        <div id="rewardBanner" class="rewardBanner hidden"></div>
+      </div>
+    </section>
   </main>
+
+  <!-- Pick modal -->
+  <div id="backdrop" class="backdrop hidden"></div>
+  <div id="pickModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Выбор лягушек">
+    <div class="modalHeader">
+      <div class="modalTitle">Выбери лягушек на сегодня (до 3)</div>
+      <button class="iconBtn" id="closePick">✕</button>
+    </div>
+    <div id="pickList" class="pickList"></div>
+    <div class="modalFooter">
+      <button class="btn" id="cancelPick">Отмена</button>
+      <button class="btn primary" id="savePick">Сохранить</button>
+    </div>
+  </div>
+
+  <!-- Add/Edit modal -->
+  <div id="editModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Лягушка">
+    <div class="modalHeader">
+      <div class="modalTitle" id="editTitle">Добавить лягушку</div>
+      <button class="iconBtn" id="closeEdit">✕</button>
+    </div>
+    <div class="modalBody">
+      <div class="field">
+        <label>Название</label>
+        <input id="fTitle" type="text" placeholder="Например: Разобрать почту" />
+      </div>
+      <div class="field">
+        <label>Дедлайн (если есть)</label>
+        <input id="fDeadline" type="date" />
+      </div>
+      <div class="field">
+        <label>Примерная оценка времени (мин)</label>
+        <input id="fEst" type="number" min="0" step="5" placeholder="25" />
+      </div>
+      <div class="help">Статус только «сделано». Отмечается из вкладки «Сегодня».</div>
+    </div>
+    <div class="modalFooter">
+      <button class="btn danger hidden" id="deleteBtn">Удалить</button>
+      <div class="spacer"></div>
+      <button class="btn" id="cancelEdit">Отмена</button>
+      <button class="btn primary" id="saveEdit">Сохранить</button>
+    </div>
+  </div>
+
+  <!-- import file input -->
+  <input id="importFile" type="file" accept="application/json" class="hidden" />
+
+  <!-- Fullscreen frog animation -->
+  <div id="frogOverlay" class="frogOverlay hidden" aria-hidden="true">
+    <div class="frogSprite" id="frogSprite">
+      <svg width="180" height="140" viewBox="0 0 180 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stop-color="#7fe3a7"/>
+            <stop offset="1" stop-color="#41c777"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="90" cy="78" rx="70" ry="52" fill="url(#g)" stroke="#1b5a3a" stroke-width="6"/>
+        <ellipse cx="55" cy="32" rx="22" ry="22" fill="#8df0b4" stroke="#1b5a3a" stroke-width="6"/>
+        <ellipse cx="125" cy="32" rx="22" ry="22" fill="#8df0b4" stroke="#1b5a3a" stroke-width="6"/>
+        <circle cx="55" cy="32" r="8" fill="#1b2a21"/>
+        <circle cx="125" cy="32" r="8" fill="#1b2a21"/>
+        <path d="M55 90 C70 110, 110 110, 125 90" fill="none" stroke="#1b2a21" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="67" cy="58" r="5" fill="#ffffff" opacity="0.7"/>
+        <circle cx="137" cy="58" r="5" fill="#ffffff" opacity="0.7"/>
+      </svg>
+      <div class="frogText">Квааа!</div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
