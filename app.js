@@ -296,29 +296,52 @@
 
   // ===== render today =====
   function renderToday() {
-    // remove ids that point to deleted or done frogs
+    // Keep today's selection stable.
+    // - Remove only missing frogs.
+    // - Keep frogs done *today* in the selection so counters don't go backwards.
+    // - If a frog was done on a different day, remove it from today's selection.
+    const t = todayISO();
     const map = new Map(pool.map(f => [f.id, f]));
-    todayIds = todayIds.filter(id => map.has(id) && !map.get(id).doneAt);
+    todayIds = todayIds.filter(id => {
+      const f = map.get(id);
+      if (!f) return false;
+      if (f.doneAt && f.doneAt !== t) return false;
+      return true;
+    });
     save(KEY_TODAY, todayIds);
 
-    const frogsToday = todayIds.map(id => map.get(id)).filter(Boolean);
+    const t = todayISO();
+    const frogsTodayAll = todayIds.map(id => map.get(id)).filter(Boolean);
+    const pickedTotal = frogsTodayAll.length;
+    const doneTotal = frogsTodayAll.filter(f => f.doneAt === t).length;
 
-    const doneCount = 0; // done today view is only chosen; done ones removed
-    statPicked.textContent = `Выбрано: ${frogsToday.length}/3`;
+    // Show only not-done-today frogs as cards (done ones disappear from the list)
+    const frogsToday = frogsTodayAll.filter(f => f.doneAt !== t);
+
+    statPicked.textContent = `Выбрано: ${pickedTotal}/3`;
 
     todayCards.innerHTML = '';
     if (!frogsToday.length) {
-      todayCards.innerHTML = `
-        <div class="card">
-          <div class="cardTitle">Пока ничего не выбрано</div>
-          <div class="cardMeta">Нажми «Изменить выбор» и отметь 1–3 лягушки на сегодня.</div>
-        </div>
-      `;
-      statDone.textContent = `Сделано: 0/0`;
+      if (pickedTotal === 0) {
+        todayCards.innerHTML = `
+          <div class="card">
+            <div class="cardTitle">Пока ничего не выбрано</div>
+            <div class="cardMeta">Нажми «Выбрать из списка» и отметь 1–3 лягушки на сегодня.</div>
+          </div>
+        `;
+      } else {
+        todayCards.innerHTML = `
+          <div class="card">
+            <div class="cardTitle">Все лягушки на сегодня закрыты 🎉</div>
+            <div class="cardMeta">Можешь выбрать новые из списка или нажать «Очистить сегодня».</div>
+          </div>
+        `;
+      }
+      statDone.textContent = `Сделано: ${doneTotal}/${pickedTotal}`;
       return;
     }
 
-    statDone.textContent = `Сделано: 0/${frogsToday.length}`;
+    statDone.textContent = `Сделано: ${doneTotal}/${pickedTotal}`;
 
     frogsToday.forEach(f => {
       const card = document.createElement('div');
@@ -383,10 +406,9 @@
         f.doneMonth = monthKey();
         save(KEY_POOL, pool);
 
-        // remove from today after tiny delay, so animation can be seen
+        // keep in today's selection for correct counters (picked stays the same),
+        // but hide completed cards via renderToday().
         setTimeout(() => {
-          todayIds = todayIds.filter(x => x !== id);
-          save(KEY_TODAY, todayIds);
           renderToday();
           renderList();  // reflect status
           renderReward(); // progress
