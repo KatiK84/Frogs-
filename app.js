@@ -54,6 +54,13 @@
   const frogOverlay = $('#frogOverlay');
   const frogSprite = $('#frogSprite');
 
+  // Victory dance overlay
+  const victoryOverlay = $('#victoryOverlay');
+  const victoryClose = $('#victoryClose');
+  const confetti = $('#confetti');
+
+  const KEY_VICTORY_PREFIX = NS + 'victory.'; // + YYYY-MM-DD
+
   // ===== storage helpers =====
   const load = (k, defVal) => {
     try {
@@ -430,6 +437,14 @@
           renderToday();
           renderList();  // reflect status
           renderReward(); // progress
+
+          // If 3 frogs are done today — celebrate once per day.
+          const ids = load(KEY_TODAY, []);
+          const doneToday = ids
+            .map(getFrogById)
+            .filter(Boolean)
+            .filter(x => x.doneAt === todayISO()).length;
+          if (doneToday >= 3) showVictoryDance();
         }, 240);
 
         // fullscreen frog + sound
@@ -635,6 +650,98 @@
       playSplat(audioCtx, t0 + 0.07);
       playRibbit(audioCtx, t0 + 0.12);
     } catch {}
+  }
+
+  function todayKey() {
+    return todayISO();
+  }
+
+  function victoryShownToday() {
+    return !!load(KEY_VICTORY_PREFIX + todayKey(), false);
+  }
+  function markVictoryShown() {
+    save(KEY_VICTORY_PREFIX + todayKey(), true);
+  }
+
+  function speakVictory() {
+    try {
+      if (!('speechSynthesis' in window)) return;
+      const u = new SpeechSynthesisUtterance('Ура! Победа!');
+      u.lang = 'ru-RU';
+      u.rate = 1.0;
+      u.pitch = 1.1;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch {}
+  }
+
+  function playVictoryFX() {
+    try {
+      ensureAudio();
+      if (!audioCtx) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const t0 = audioCtx.currentTime + 0.01;
+      // quick celebratory arpeggio
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+      notes.forEach((f, i) => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'triangle';
+        o.frequency.value = f;
+        g.gain.value = 0;
+        o.connect(g);
+        g.connect(audioCtx.destination);
+        const t = t0 + i * 0.08;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.14, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        o.start(t);
+        o.stop(t + 0.2);
+      });
+      // a tiny "ква" on top
+      playRibbit(audioCtx, t0 + 0.15);
+    } catch {}
+  }
+
+  function buildConfetti() {
+    if (!confetti) return;
+    confetti.innerHTML = '';
+    const n = 26;
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement('span');
+      s.className = 'confetto';
+      s.style.left = Math.round(Math.random() * 100) + '%';
+      s.style.animationDelay = (Math.random() * 0.25) + 's';
+      s.style.transform = `rotate(${Math.round(Math.random()*180)}deg)`;
+      confetti.appendChild(s);
+    }
+  }
+
+  function showVictoryDance() {
+    if (!victoryOverlay) return;
+    if (victoryShownToday()) return;
+    markVictoryShown();
+    buildConfetti();
+    victoryOverlay.classList.remove('hidden');
+    victoryOverlay.setAttribute('aria-hidden', 'false');
+    playVictoryFX();
+    speakVictory();
+    setTimeout(() => hideVictoryDance(), 5200);
+  }
+
+  function hideVictoryDance() {
+    if (!victoryOverlay) return;
+    victoryOverlay.classList.add('hidden');
+    victoryOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  if (victoryOverlay) {
+    victoryOverlay.addEventListener('click', (e) => {
+      if (e.target === victoryOverlay) hideVictoryDance();
+    });
+  }
+  if (victoryClose) {
+    victoryClose.addEventListener('click', hideVictoryDance);
   }
 
   // ===== utils =====

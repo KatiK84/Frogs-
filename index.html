@@ -164,6 +164,17 @@
     </div>
   </div>
 
+  <!-- Victory dance overlay (shown when 3 frogs are done today) -->
+  <div id="victoryOverlay" class="victoryOverlay hidden" aria-hidden="true">
+    <div class="victoryCard" role="dialog" aria-modal="true" aria-label="Победа дня">
+      <button class="iconBtn victoryClose" id="victoryClose" aria-label="Закрыть">✕</button>
+      <div class="victoryTitle">Ура, победа! 🎉</div>
+      <div class="victorySub">Все 3 лягушки закрыты сегодня</div>
+      <div class="victoryFrog" id="victoryFrog" aria-hidden="true"></div>
+      <div class="confetti" id="confetti" aria-hidden="true"></div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
