@@ -625,7 +625,7 @@
   }
 
   function toast(text) {
-    const t = document.createElement('div');
+    const toast = document.createElement('div');
     t.textContent = text;
     t.style.position = 'fixed';
     t.style.left = '50%';
