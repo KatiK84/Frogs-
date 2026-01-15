@@ -711,3 +711,140 @@ function randomToast(){
   return FROG_TOASTS[Math.floor(Math.random()*FROG_TOASTS.length)];
 }
 
+// 🐸 Daily 3/3 celebration (plays only once per day)
+function getCelebrationMap(){ return load(DAILY_CELEBRATION_KEY, {}); }
+function markCelebratedToday(){
+  const map = getCelebrationMap();
+  map[todayISO()] = true;
+  save(DAILY_CELEBRATION_KEY, map);
+}
+function alreadyCelebratedToday(){
+  const map = getCelebrationMap();
+  return !!map[todayISO()];
+}
+function doneCountToday(){
+  return pool.filter(f => f.doneAt === todayISO()).length;
+}
+
+let latinAudioCtx = null;
+let latinAudioStopAt = 0;
+
+function playLatinJingle(durationMs=5000){
+  try{
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if(!AudioCtx) return;
+    if(!latinAudioCtx) latinAudioCtx = new AudioCtx();
+    const ctx = latinAudioCtx;
+
+    // resume if suspended (iOS)
+    if(ctx.state === "suspended"){
+      ctx.resume().catch(()=>{});
+    }
+
+    const start = ctx.currentTime;
+    const end = start + (durationMs/1000);
+    latinAudioStopAt = end;
+
+    // master
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.12, start); // мягко
+    master.connect(ctx.destination);
+
+    // simple bossa/latin-ish beat: kick + clave + synth chord
+    function kick(t){
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(120, t);
+      o.frequency.exponentialRampToValueAtTime(45, t+0.12);
+      g.gain.setValueAtTime(1, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+0.14);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t+0.16);
+    }
+    function click(t, freq=2000, decay=0.03){
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.5, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+decay);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t+decay+0.01);
+    }
+    function chord(t, freq, len=0.18){
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.22, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t+len);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t+len+0.02);
+    }
+
+    const bpm = 124;
+    const beat = 60/bpm; // quarter
+    // schedule 5 seconds, 1 bar = 4 beats, use 2-bar loop
+    let t = start;
+    while(t < end - 0.001){
+      // kick on 1 and 3
+      kick(t);
+      kick(t + 2*beat);
+
+      // clave-ish clicks
+      click(t + 0.5*beat, 2200);
+      click(t + 1.5*beat, 2400);
+      click(t + 2.5*beat, 2100);
+      click(t + 3.0*beat + 0.25*beat, 2600);
+
+      // tiny chord stabs
+      chord(t + beat, 392);      // G
+      chord(t + beat, 494);      // B
+      chord(t + beat, 587);      // D
+      chord(t + 3*beat, 392);
+      chord(t + 3*beat, 494);
+      chord(t + 3*beat, 587);
+
+      t += 4*beat;
+    }
+  }catch(_e){}
+}
+
+function showDanceOverlay(){
+  const overlayEl = document.createElement("div");
+  overlayEl.className = "frogDanceOverlay";
+  overlayEl.innerHTML = `
+    <div class="frogDanceCard">
+      <div class="frogDanceTitle">3/3 🐸 Танцы победы!</div>
+      <div class="frogDanceSub">Ты закрыла все лягушки на сегодня. Танцуем 5 секунд 😄</div>
+      <div class="frogDancer" aria-hidden="true">
+        <div class="frogFace">
+          <div class="frogEye left"><div class="frogPupil"></div></div>
+          <div class="frogEye right"><div class="frogPupil"></div></div>
+          <div class="frogSmile"></div>
+        </div>
+      </div>
+      <div class="frogDanceTimer">Нажми куда угодно, чтобы закрыть</div>
+    </div>
+  `;
+  document.body.appendChild(overlayEl);
+
+  const close = ()=>{
+    if(overlayEl.isConnected) overlayEl.remove();
+  };
+  overlayEl.addEventListener("click", close, { once:true });
+  setTimeout(close, 5000);
+}
+
+function triggerDailyCelebrationIfNeeded(){
+  try{
+    if(alreadyCelebratedToday()) return;
+    if(doneCountToday() === 3){
+      markCelebratedToday();
+      playLatinJingle(5000);
+      showDanceOverlay();
+    }
+  }catch(_e){}
+}
+

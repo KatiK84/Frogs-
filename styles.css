@@ -325,3 +325,124 @@ input:focus{border-color: rgba(67,209,127,.55)}
   transition:width 220ms ease-out;
 }
 .progressHint{margin-top:8px;color:rgba(255,255,255,0.78);font-size:13px;font-weight:700}
+
+
+/* 🐸 3/3 daily celebration overlay */
+.frogDanceOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 20% 20%, rgba(140,255,180,0.25), transparent 55%),
+              radial-gradient(circle at 80% 70%, rgba(255,209,102,0.18), transparent 55%),
+              rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+}
+
+.frogDanceCard{
+  width: min(420px, 92vw);
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(15,47,34,0.78);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+  padding: 18px 16px 16px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.frogDanceTitle{
+  font-weight: 950;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.frogDanceSub{
+  color: rgba(255,255,255,0.82);
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 12px;
+}
+
+.frogDancer{
+  width: 150px;
+  height: 150px;
+  margin: 0 auto 12px;
+  border-radius: 26px;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  position: relative;
+}
+
+.frogFace{
+  width: 128px;
+  height: 104px;
+  border-radius: 999px;
+  background: rgba(140,255,180,0.98);
+  position: relative;
+  transform-origin: 50% 85%;
+  animation: frogDance 520ms ease-in-out infinite;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.25));
+}
+
+.frogFace::before,
+.frogFace::after{
+  content:"";
+  position:absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(140,255,180,0.98);
+  top: -18px;
+}
+.frogFace::before{ left: 12px; }
+.frogFace::after{ right: 12px; }
+
+.frogEye{
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(245,255,250,1);
+  top: 24px;
+}
+.frogEye.left{ left: 34px; }
+.frogEye.right{ right: 34px; }
+
+.frogPupil{
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(10,40,25,1);
+  top: 6px;
+  left: 6px;
+}
+
+.frogSmile{
+  position: absolute;
+  left: 50%;
+  top: 58px;
+  width: 60px;
+  height: 26px;
+  transform: translateX(-50%);
+  border-bottom: 4px solid rgba(10,60,35,0.55);
+  border-radius: 0 0 999px 999px;
+}
+
+@keyframes frogDance{
+  0%   { transform: translateY(0) rotate(-7deg) scale(1); }
+  25%  { transform: translateY(-7px) rotate(7deg) scale(1.03); }
+  50%  { transform: translateY(0) rotate(-5deg) scale(1.01); }
+  75%  { transform: translateY(-6px) rotate(8deg) scale(1.03); }
+  100% { transform: translateY(0) rotate(-7deg) scale(1); }
+}
+
+.frogDanceTimer{
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+}
