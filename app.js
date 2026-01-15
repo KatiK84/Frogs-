@@ -22,6 +22,7 @@
   const backdrop = $('#backdrop');
   const pickModal = $('#pickModal');
   const pickList = $('#pickList');
+  const pickCountPill = $('#pickCountPill');
   const pickBtn = $('#pickBtn');
   const clearTodayBtn = $('#clearTodayBtn');
   const closePick = $('#closePick');
@@ -137,16 +138,38 @@
       pickList.appendChild(item);
     });
 
-    // enforce max 3
-    pickList.onchange = () => {
+    const updatePickUI = () => {
       const checks = $$(`#pickList input[type="checkbox"]`);
       const chosen = checks.filter(c => c.checked);
-      if (chosen.length > 3) {
-        // revert last toggle
-        const last = chosen[chosen.length-1];
-        last.checked = false;
-      }
+      const n = chosen.length;
+      if (pickCountPill) pickCountPill.textContent = `${n}/${LIMIT}`;
+      // lock remaining checkboxes when limit reached
+      checks.forEach(c => {
+        c.disabled = (n >= LIMIT) && !c.checked;
+      });
     };
+
+    // enforce max 3 with a friendly toast
+    pickList.onchange = (e) => {
+      const t = e?.target;
+      if (!(t && t.matches && t.matches('input[type="checkbox"]'))) {
+        updatePickUI();
+        return;
+      }
+
+      const checks = $$(`#pickList input[type="checkbox"]`);
+      const chosen = checks.filter(c => c.checked);
+
+      if (chosen.length > LIMIT) {
+        // revert the checkbox that triggered the overflow
+        t.checked = false;
+        showToast(`Лимит ${LIMIT} лягушки. Сначала сними выбор с одной.`, 'warn');
+      }
+
+      updatePickUI();
+    };
+
+    updatePickUI();
 
     openModal(pickModal);
   };
