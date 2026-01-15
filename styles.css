@@ -109,3 +109,32 @@ body{
 .small{font-size:12px;color:var(--muted)}
 .checkboxRow{display:flex; gap:10px; align-items:flex-start;}
 .checkboxRow input{margin-top:4px; transform: scale(1.15);}
+/* Frog hop when done */
+@keyframes frogHop {
+  0%   { transform: translateY(0) scale(1); }
+  35%  { transform: translateY(-14px) scale(1.04); }
+  60%  { transform: translateY(0) scale(0.98); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.frog-hop {
+  animation: frogHop 420ms ease-out;
+}
+
+.frog-spark {
+  position: absolute;
+  inset: -6px;
+  border-radius: 18px;
+  pointer-events: none;
+  background: radial-gradient(circle at 20% 30%, rgba(80, 255, 160, 0.25), transparent 60%),
+              radial-gradient(circle at 80% 70%, rgba(120, 255, 120, 0.18), transparent 55%);
+  opacity: 0;
+  animation: sparkFade 500ms ease-out;
+}
+
+@keyframes sparkFade {
+  0%   { opacity: 0; transform: scale(0.98); }
+  25%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.02); }
+}
+
