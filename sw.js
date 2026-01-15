@@ -1,5 +1,5 @@
 
-const CACHE = 'frogs-pwa-v3-anim';
+const CACHE = 'frogs-pwa-v4-reward';
 const ASSETS = [
   './',
   './index.html',

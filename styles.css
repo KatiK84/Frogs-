@@ -307,3 +307,21 @@ input:focus{border-color: rgba(67,209,127,.55)}
 .frogToast.show{
   animation: frogToastInOut 1100ms ease-out forwards;
 }
+
+/* Reward progress */
+.progressWrap{margin-top:12px}
+.progressBar{
+  height:12px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.16);
+  overflow:hidden;
+}
+.progressFill{
+  height:100%;
+  width:0%;
+  border-radius:999px;
+  background:linear-gradient(90deg, rgba(127,227,167,0.95), rgba(65,199,119,0.95));
+  transition:width 220ms ease-out;
+}
+.progressHint{margin-top:8px;color:rgba(255,255,255,0.78);font-size:13px;font-weight:700}

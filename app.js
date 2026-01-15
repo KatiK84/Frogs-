@@ -44,6 +44,8 @@
   const rewardBanner = $('#rewardBanner');
   const monthKeyEl = $('#monthKey');
   const monthProgress = $('#monthProgress');
+  const monthBar = $('#monthBar');
+  const progressHint = $('#progressHint');
 
   const exportBtn = $('#exportBtn');
   const importBtn = $('#importBtn');
@@ -439,19 +441,30 @@
   function renderReward() {
     const mk = monthKey();
     monthKeyEl.textContent = mk;
+    const goal = 20;
     const doneThisMonth = pool.filter(f => f.doneMonth === mk).length;
-    monthProgress.textContent = `Прогресс: ${doneThisMonth}/20`;
+    monthProgress.textContent = `Прогресс: ${doneThisMonth}/${goal}`;
+
+    const pct = Math.max(0, Math.min(100, Math.round((doneThisMonth / goal) * 100)));
+    if (monthBar) monthBar.style.width = `${pct}%`;
 
     const rKey = KEY_REWARD_PREFIX + mk;
     const reward = load(rKey, '');
     rewardInput.value = reward;
 
-    if (doneThisMonth >= 20 && reward.trim()) {
+    if (doneThisMonth >= goal && reward.trim()) {
       rewardBanner.classList.remove('hidden');
-      rewardBanner.textContent = `🎉 Ты закрыла минимум 20 лягушек! Награда: ${reward}`;
+      rewardBanner.textContent = `🎉 Ты закрыла минимум ${goal} лягушек! Награда: ${reward}`;
+      if (progressHint) progressHint.textContent = 'Разблокировано 🎉';
+    } else if (doneThisMonth >= goal && !reward.trim()) {
+      rewardBanner.classList.remove('hidden');
+      rewardBanner.textContent = `🎉 Ты закрыла минимум ${goal} лягушек! Добавь награду выше — и она будет ждать тебя.`;
+      if (progressHint) progressHint.textContent = 'Разблокировано 🎉';
     } else {
       rewardBanner.classList.add('hidden');
       rewardBanner.textContent = '';
+      const left = Math.max(0, goal - doneThisMonth);
+      if (progressHint) progressHint.textContent = `Осталось ${left} до награды`;
     }
   }
   rewardInput.addEventListener('input', () => {
