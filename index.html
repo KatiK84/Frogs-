@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#155b3f" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Frogs 🐸</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brandIcon">🐸</div>
+      <div>
+        <div class="brandTitle">Frogs</div>
+        <div class="brandSub" id="subtitle">Сегодня</div>
+      </div>
+    </div>
+
+    <div class="topActions">
+      <button class="btn" id="exportBtn" title="Экспорт">⤓</button>
+      <label class="btn fileBtn" title="Импорт">
+        ⤒
+        <input id="importFile" type="file" accept="application/json" />
+      </label>
+    </div>
+  </header>
+
+  <main class="container">
+    <nav class="tabs">
+      <button class="tab active" data-tab="today">Сегодня</button>
+      <button class="tab" data-tab="list">Список</button>
+      <button class="tab" data-tab="reward">Награда</button>
+    </nav>
+
+    <section id="viewToday" class="view"></section>
+    <section id="viewList" class="view hidden"></section>
+    <section id="viewReward" class="view hidden"></section>
+
+    <footer class="footerNote">
+      <div class="note">Данные хранятся только на этом устройстве (без синхронизации).</div>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
