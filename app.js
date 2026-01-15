@@ -296,27 +296,19 @@
 
   // ===== render today =====
   function renderToday() {
-    // Keep today's selection stable.
-    // - Remove only missing frogs.
-    // - Keep frogs done *today* in the selection so counters don't go backwards.
-    // - If a frog was done on a different day, remove it from today's selection.
-    const t = todayISO();
+    // Keep todayIds stable for the whole day.
+    // We only remove ids that point to deleted frogs.
+    // (Done frogs stay in todayIds so the counters don't go backwards.)
     const map = new Map(pool.map(f => [f.id, f]));
-    todayIds = todayIds.filter(id => {
-      const f = map.get(id);
-      if (!f) return false;
-      if (f.doneAt && f.doneAt !== t) return false;
-      return true;
-    });
+    todayIds = todayIds.filter(id => map.has(id));
     save(KEY_TODAY, todayIds);
 
-    const t = todayISO();
     const frogsTodayAll = todayIds.map(id => map.get(id)).filter(Boolean);
     const pickedTotal = frogsTodayAll.length;
-    const doneTotal = frogsTodayAll.filter(f => f.doneAt === t).length;
+    const doneTotal = frogsTodayAll.filter(f => !!f.doneAt).length;
 
-    // Show only not-done-today frogs as cards (done ones disappear from the list)
-    const frogsToday = frogsTodayAll.filter(f => f.doneAt !== t);
+    // Show only not-done frogs as cards (done ones disappear from the list)
+    const frogsToday = frogsTodayAll.filter(f => !f.doneAt);
 
     statPicked.textContent = `Выбрано: ${pickedTotal}/3`;
 
@@ -625,7 +617,7 @@
   }
 
   function toast(text) {
-    const toast = document.createElement('div');
+    const t = document.createElement('div');
     t.textContent = text;
     t.style.position = 'fixed';
     t.style.left = '50%';
