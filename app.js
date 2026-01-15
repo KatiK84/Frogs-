@@ -101,14 +101,15 @@
 
   // ===== modal helpers =====
   const openModal = (modal) => {
-    backdrop.classList.remove('hidden');
-    modal.classList.remove('hidden');
+    if (backdrop) backdrop.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
   };
   const closeModal = (modal) => {
-    modal.classList.add('hidden');
-    if (pickModal.classList.contains('hidden') && editModal.classList.contains('hidden')) {
-      backdrop.classList.add('hidden');
+    if (modal) modal.classList.add('hidden');
+    const anyOpen = !!document.querySelector('.modal:not(.hidden)');
+    if (!anyOpen) {
+      if (backdrop) backdrop.classList.add('hidden');
       document.body.style.overflow = '';
     }
   };
@@ -176,7 +177,7 @@
     openModal(pickModal);
   };
 
-  pickBtn.addEventListener('click', openPick);
+  if(pickBtn) pickBtn.addEventListener('click', openPick);
   closePick.addEventListener('click', () => closeModal(pickModal));
   cancelPick.addEventListener('click', () => closeModal(pickModal));
   savePick.addEventListener('click', () => {
@@ -839,6 +840,8 @@ function showDanceOverlay(){
 
 function triggerDailyCelebrationIfNeeded(){
   try{
+    if(!isCelebrationEnabled()) return;
+
     if(alreadyCelebratedToday()) return;
     if(doneCountToday() === 3){
       markCelebratedToday();
@@ -846,5 +849,17 @@ function triggerDailyCelebrationIfNeeded(){
       showDanceOverlay();
     }
   }catch(_e){}
+}
+
+// Settings (local only)
+function getSettings(){
+  return load(KEY_SETTINGS, { celebrationEnabled: true });
+}
+function setSettings(s){
+  save(KEY_SETTINGS, s);
+}
+function isCelebrationEnabled(){
+  const s = getSettings();
+  return s.celebrationEnabled !== false;
 }
 
