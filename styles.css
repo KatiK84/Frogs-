@@ -275,3 +275,35 @@ input:focus{border-color: rgba(67,209,127,.55)}
   .tab{padding:10px 12px}
   .frogText{display:none}
 }
+
+
+/* 🐸 Encouragement toast */
+.frogToast{
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.95);
+  font-weight: 800;
+  font-size: 13px;
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes frogToastInOut{
+  0%   { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.98); }
+  15%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  85%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(1.01); }
+}
+
+.frogToast.show{
+  animation: frogToastInOut 1100ms ease-out forwards;
+}

@@ -632,3 +632,32 @@
   renderList();
   renderReward();
 })();
+// 🐸 encouragement toast (no settings, local only)
+const FROG_TOASTS = [
+  "🐸 Прыгнула! Отличная работа",
+  "Готово ✔ Хороший шаг",
+  "Минус одна лягушка 🐸✨",
+  "Сделано. Ты молодец",
+  "Ещё одна победа 🐸",
+  "Отлично! Дыши 🙂",
+];
+
+function showFrogToast(text){
+  try{
+    let t = document.querySelector(".frogToast");
+    if(!t){
+      t = document.createElement("div");
+      t.className = "frogToast";
+      document.body.appendChild(t);
+    }
+    t.textContent = text;
+    t.classList.remove("show");
+    void t.offsetWidth;
+    t.classList.add("show");
+  }catch(_e){}
+}
+
+function randomToast(){
+  return FROG_TOASTS[Math.floor(Math.random()*FROG_TOASTS.length)];
+}
+
