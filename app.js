@@ -130,20 +130,64 @@ function renderToday(){
       </div>
     `).join("");
   }
+todayCards.onclick = (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
 
-  todayCards.onclick=(e)=>{
-    const btn=e.target.closest("button[data-action]");
-    if(!btn)return;
-    const id=btn.dataset.id;
-    const action=btn.dataset.action;
-    const f=getFrogById(id);
-    if(!f)return;
-    if(action==="done"){
-      f.doneAt=todayISO();
-      save(KEY_FROGS,pool);
-      // remove from today's selection so it disappears immediately
-      const idsNow=getTodayIds().filter(x=>x!==id);
-      setTodayIds(idsNow);
+  const card = btn.closest('.card');
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+
+  const f = getFrogById(id);
+  if (!f) return;
+
+  if (action === "done") {
+    // 🐸 hop animation FIRST
+    if (card) {
+      card.classList.remove("frog-hop");
+      void card.offsetWidth; // перезапуск анимации
+      card.classList.add("frog-hop");
+      const spark = document.createElement("div");
+      spark.className = "frog-spark";
+      card.style.position = "relative";
+      card.appendChild(spark);
+      setTimeout(() => spark.remove(), 520);
+    }
+
+    // поставить done
+    f.doneAt = todayISO();
+    save(KEY_FROGS, pool);
+
+    // удалить из "Сегодня" ПОСЛЕ анимации
+    setTimeout(() => {
+     const idsNow = getTodayIds().map(String).filter(x => x !== String(id));
+setTodayIds(idsNow);
+renderToday();
+    }, 420);
+
+    return;
+  }
+
+  // остальные action ниже (если есть)
+};
+
+
+  return;
+}
+
+    if (card) {
+      card.classList.remove("frog-hop");
+      void card.offsetWidth; // перезапуск анимации
+      card.classList.add("frog-hop");
+
+      // spark overlay
+      const spark = document.createElement("div");
+      spark.className = "frog-spark";
+      card.style.position = "relative";
+      card.appendChild(spark);
+      setTimeout(() => spark.remove(), 520);
+    }
+
       renderToday();
       return;
     }
